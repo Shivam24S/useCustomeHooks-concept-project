@@ -1,10 +1,12 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from "react";
 
-import Places from './components/Places.jsx';
-import Modal from './components/Modal.jsx';
-import DeleteConfirmation from './components/DeleteConfirmation.jsx';
-import logoImg from './assets/logo.png';
-import AvailablePlaces from './components/AvailablePlaces.jsx';
+import Places from "./components/Places.jsx";
+import Modal from "./components/Modal.jsx";
+import DeleteConfirmation from "./components/DeleteConfirmation.jsx";
+import logoImg from "./assets/logo.png";
+import AvailablePlaces from "./components/AvailablePlaces.jsx";
+import { UserSelectPlacesData, userUpdatePlaces } from "./components/Http.js";
+import Error from "./components/Error.jsx";
 
 function App() {
   const selectedPlace = useRef();
@@ -12,6 +14,11 @@ function App() {
   const [userPlaces, setUserPlaces] = useState([]);
 
   const [modalIsOpen, setModalIsOpen] = useState(false);
+
+  const [errorHandlingModal, setErrorHandlingModal] = useState();
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState();
 
   function handleStartRemovePlace(place) {
     setModalIsOpen(true);
@@ -22,7 +29,26 @@ function App() {
     setModalIsOpen(false);
   }
 
-  function handleSelectPlace(selectedPlace) {
+  // showing user selected data from database
+
+  useEffect(() => {
+    async function fetchUserPlaces() {
+      setIsLoading(true);
+      try {
+        const places = await UserSelectPlacesData();
+        setUserPlaces(places);
+      } catch (error) {
+        setUserPlaces(userPlaces);
+        setError({
+          message: error.message,
+        });
+      }
+      setIsLoading(false);
+    }
+    fetchUserPlaces();
+  }, []);
+
+  async function handleSelectPlace(selectedPlace) {
     setUserPlaces((prevPickedPlaces) => {
       if (!prevPickedPlaces) {
         prevPickedPlaces = [];
@@ -32,18 +58,58 @@ function App() {
       }
       return [selectedPlace, ...prevPickedPlaces];
     });
+
+    // optimistic code update
+    try {
+      await userUpdatePlaces([selectedPlace, ...userPlaces]);
+    } catch (error) {
+      setUserPlaces(userPlaces);
+      setErrorHandlingModal({
+        message: error.message || "failed to update the data",
+      });
+    }
   }
 
-  const handleRemovePlace = useCallback(async function handleRemovePlace() {
-    setUserPlaces((prevPickedPlaces) =>
-      prevPickedPlaces.filter((place) => place.id !== selectedPlace.current.id)
-    );
+  const handleError = () => {
+    setErrorHandlingModal(null);
+  };
 
-    setModalIsOpen(false);
-  }, []);
+  const handleRemovePlace = useCallback(
+    async function handleRemovePlace() {
+      setUserPlaces((prevPickedPlaces) =>
+        prevPickedPlaces.filter(
+          (place) => place.id !== selectedPlace.current.id
+        )
+      );
+
+      setModalIsOpen(false);
+
+      // deleting data from database
+      try {
+        await userUpdatePlaces(
+          userPlaces.filter((place) => place.id !== selectedPlace.current.id)
+        );
+      } catch (error) {
+        setUserPlaces(userPlaces);
+        setErrorHandlingModal({
+          message: error.message || "failed to Delete the data",
+        });
+      }
+    },
+    [userPlaces]
+  );
 
   return (
     <>
+      <Modal open={errorHandlingModal} onClose={handleError}>
+        {errorHandlingModal && (
+          <Error
+            title={"an error occurred"}
+            message={errorHandlingModal.message}
+            onConfirm={handleError}
+          />
+        )}
+      </Modal>
       <Modal open={modalIsOpen} onClose={handleStopRemovePlace}>
         <DeleteConfirmation
           onCancel={handleStopRemovePlace}
@@ -60,12 +126,17 @@ function App() {
         </p>
       </header>
       <main>
-        <Places
-          title="I'd like to visit ..."
-          fallbackText="Select the places you would like to visit below."
-          places={userPlaces}
-          onSelectPlace={handleStartRemovePlace}
-        />
+        {error && <Error title="an error occurred" message={error.message} />}
+        {!error && (
+          <Places
+            title="I'd like to visit ..."
+            fallbackText="Select the places you would like to visit below."
+            places={userPlaces}
+            onSelectPlace={handleStartRemovePlace}
+            isLoading={isLoading}
+            loadingText="fetching data...."
+          />
+        )}
 
         <AvailablePlaces onSelectPlace={handleSelectPlace} />
       </main>
