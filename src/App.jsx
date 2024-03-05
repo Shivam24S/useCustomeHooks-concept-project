@@ -7,18 +7,27 @@ import logoImg from "./assets/logo.png";
 import AvailablePlaces from "./components/AvailablePlaces.jsx";
 import { UserSelectPlacesData, userUpdatePlaces } from "./components/Http.js";
 import Error from "./components/Error.jsx";
+import { useFetch } from "./hooks/useFetch.js";
 
 function App() {
   const selectedPlace = useRef();
 
-  const [userPlaces, setUserPlaces] = useState([]);
+  // const [userPlaces, setUserPlaces] = useState([]);
 
   const [modalIsOpen, setModalIsOpen] = useState(false);
 
   const [errorHandlingModal, setErrorHandlingModal] = useState();
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState();
+  // using custom hooks
+  const {
+    isLoading,
+    error,
+    fetchedData: userPlaces,
+    setFetchedData: setUserPlaces,
+  } = useFetch({
+    FetchFn: UserSelectPlacesData,
+    initialValue: [],
+  });
 
   function handleStartRemovePlace(place) {
     setModalIsOpen(true);
@@ -30,23 +39,6 @@ function App() {
   }
 
   // showing user selected data from database
-
-  useEffect(() => {
-    async function fetchUserPlaces() {
-      setIsLoading(true);
-      try {
-        const places = await UserSelectPlacesData();
-        setUserPlaces(places);
-      } catch (error) {
-        setUserPlaces(userPlaces);
-        setError({
-          message: error.message,
-        });
-      }
-      setIsLoading(false);
-    }
-    fetchUserPlaces();
-  }, []);
 
   async function handleSelectPlace(selectedPlace) {
     setUserPlaces((prevPickedPlaces) => {
@@ -96,7 +88,7 @@ function App() {
         });
       }
     },
-    [userPlaces]
+    [userPlaces, setUserPlaces]
   );
 
   return (

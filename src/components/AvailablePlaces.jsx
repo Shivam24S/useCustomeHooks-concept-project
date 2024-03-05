@@ -3,12 +3,23 @@ import Places from "./Places.jsx";
 import Error from "./Error.jsx";
 import { sortPlacesByDistance } from "../loc.js";
 import { FetchAvailablePlaces } from "./Http.js";
+import { useFetch } from "../hooks/useFetch.js";
+
+async function fetchSortedPlaces() {
+  const places = await FetchAvailablePlaces();
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition((position) => {
+      const sortedPlaces = sortPlacesByDistance(
+        places,
+        position.coords.latitude,
+        position.coords.longitude
+      );
+      resolve(sortedPlaces);
+    });
+  });
+}
 
 export default function AvailablePlaces({ onSelectPlace }) {
-  const [availablePlaces, setAvailablePlaces] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState();
-
   // useEffect(() => {
   //   fetch("http://localhost:3000/places")
   //     .then((response) => {
@@ -19,33 +30,16 @@ export default function AvailablePlaces({ onSelectPlace }) {
   //     });
   // }, []);
 
-  // now using async await method for fetching this method preferable due to code readability
+  // using custom hook
 
-  useEffect(() => {
-    async function fetchPlaces() {
-      try {
-        setIsLoading(true);
-        // optimizing code Structure moving into another separate file
-        const places = await FetchAvailablePlaces();
-        // getting user location for sorting places data by distance
-        navigator.geolocation.getCurrentPosition((position) => {
-          const sortedPlaces = sortPlacesByDistance(
-            places,
-            position.coords.latitude,
-            position.coords.longitude
-          );
-          setAvailablePlaces(sortedPlaces);
-          setIsLoading(false);
-        });
-      } catch (error) {
-        setError({
-          message: error.message || "please try again later after sometime",
-        });
-      }
-      setIsLoading(false);
-    }
-    fetchPlaces();
-  }, []);
+  const {
+    isLoading,
+    error,
+    fetchedData: availablePlaces,
+  } = useFetch({
+    FetchFn: fetchSortedPlaces,
+    initialValue: [],
+  });
 
   if (error) {
     return <Error title={"an error occurred"} message={error.message} />;
